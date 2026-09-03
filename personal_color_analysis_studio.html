@@ -1,0 +1,1112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AuraTone - Personal Color Analysis & Draping Studio</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <!-- html2canvas for capturing DOM elements to PNG -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+  <style>
+    /* Custom Reticle and Overlay styling */
+    .face-guide {
+      border: 2px dashed rgba(255, 255, 255, 0.7);
+      border-radius: 50% 50% 46% 46% / 60% 60% 40% 40%;
+      box-shadow: 0 0 0 9999px rgba(15, 23, 42, 0.55);
+    }
+    .sample-zone {
+      animation: pulse-ring 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+    }
+    @keyframes pulse-ring {
+      0%, 100% { opacity: 0.8; transform: scale(1); }
+      50% { opacity: 0.4; transform: scale(1.08); }
+    }
+    /* Hide scrollbar for tabs */
+    .no-scrollbar::-webkit-scrollbar { display: none; }
+    .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+  </style>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col font-sans antialiased selection:bg-rose-500 selection:text-white">
+
+  <!-- Header / Navigation -->
+  <header class="border-b border-slate-800 bg-slate-900/70 backdrop-blur-md sticky top-0 z-50">
+    <div class="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
+      <div class="flex items-center space-x-3">
+        <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-rose-500 via-amber-400 to-indigo-500 flex items-center justify-center shadow-lg shadow-rose-500/20">
+          <i data-lucide="sparkles" class="w-5 h-5 text-white"></i>
+        </div>
+        <div>
+          <h1 class="text-lg font-bold tracking-tight bg-gradient-to-r from-rose-200 via-amber-100 to-teal-200 bg-clip-text text-transparent">AuraTone AI</h1>
+          <p class="text-xs text-slate-400">Personal Color & Virtual Draping Analysis</p>
+        </div>
+      </div>
+      <div class="flex items-center space-x-2">
+        <button id="demoBtn" class="px-3 py-1.5 rounded-lg text-xs font-medium bg-slate-800 hover:bg-slate-700 text-slate-300 transition flex items-center gap-1.5 border border-slate-700">
+          <i data-lucide="image" class="w-3.5 h-3.5"></i> Sample Model
+        </button>
+        <button id="resetAppBtn" class="px-3 py-1.5 rounded-lg text-xs font-medium bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 transition flex items-center gap-1.5 border border-rose-500/30">
+          <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i> Reset
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Container -->
+  <main class="flex-1 max-w-6xl w-full mx-auto p-4 sm:p-6 grid grid-cols-1 lg:grid-cols-12 gap-6">
+
+    <!-- Left Column: Camera Viewport & Capture -->
+    <div class="lg:col-span-7 flex flex-col space-y-4">
+      <div class="relative bg-slate-900 rounded-2xl overflow-hidden border border-slate-800 shadow-2xl aspect-[3/4] sm:aspect-[4/3] flex items-center justify-center">
+
+        <!-- Live Video Element -->
+        <video id="webcam" autoplay playsinline muted class="w-full h-full object-cover"></video>
+        
+        <!-- Canvas for sampling and snapshot processing -->
+        <canvas id="analysisCanvas" class="hidden"></canvas>
+        <img id="snapshotImg" class="hidden w-full h-full object-cover" alt="Captured Tone" />
+
+        <!-- Camera Reticle / Face Guide Overlay -->
+        <div id="reticleOverlay" class="absolute inset-0 pointer-events-none flex flex-col items-center justify-center">
+          <div class="relative w-56 h-72 sm:w-64 sm:h-80 face-guide flex flex-col items-center justify-center">
+            
+            <!-- Cheek Sample Targets -->
+            <div class="absolute top-[52%] left-10 w-10 h-10 rounded-full border-2 border-amber-300 bg-amber-400/20 sample-zone flex items-center justify-center">
+              <span class="w-2 h-2 rounded-full bg-amber-300"></span>
+            </div>
+            <div class="absolute top-[52%] right-10 w-10 h-10 rounded-full border-2 border-amber-300 bg-amber-400/20 sample-zone flex items-center justify-center">
+              <span class="w-2 h-2 rounded-full bg-amber-300"></span>
+            </div>
+
+            <!-- Forehead Sample Target -->
+            <div class="absolute top-[22%] w-10 h-10 rounded-full border-2 border-teal-300 bg-teal-400/20 sample-zone flex items-center justify-center">
+              <span class="w-2 h-2 rounded-full bg-teal-300"></span>
+            </div>
+
+            <!-- Alignment lines -->
+            <div class="w-8 h-0.5 bg-white/40"></div>
+            <p class="absolute -bottom-8 text-xs font-semibold text-slate-200 bg-slate-900/80 px-3 py-1 rounded-full border border-slate-700 backdrop-blur">
+              Position face & cheeks inside markers
+            </p>
+          </div>
+        </div>
+
+        <!-- Virtual Fabric Collar Drape Simulation Overlay -->
+        <div id="virtualDrapeCollar" class="absolute bottom-0 inset-x-0 h-28 pointer-events-none transition-all duration-300 opacity-90 flex flex-col justify-end">
+          <svg viewBox="0 0 500 150" preserveAspectRatio="none" class="w-full h-full">
+            <path id="drapePathLeft" d="M0,150 L0,40 Q150,120 250,50 L250,150 Z" fill="#93c5fd" />
+            <path id="drapePathRight" d="M250,50 Q350,120 500,40 L500,150 L250,150 Z" fill="#60a5fa" />
+          </svg>
+          <div id="drapeLabel" class="absolute bottom-2 left-4 text-[11px] font-bold tracking-wider uppercase px-2 py-0.5 rounded bg-slate-900/80 text-white border border-white/20">
+            Drape: Baby Blue
+          </div>
+        </div>
+
+        <!-- Loading indicator -->
+        <div id="loadingOverlay" class="absolute inset-0 bg-slate-950/80 backdrop-blur-sm flex flex-col items-center justify-center gap-3 hidden z-30">
+          <div class="w-10 h-10 border-4 border-rose-500 border-t-transparent rounded-full animate-spin"></div>
+          <p class="text-sm font-medium text-slate-200">Analyzing undertone & color harmony...</p>
+        </div>
+
+        <!-- Lighting Warning Banner -->
+        <div id="lightWarning" class="absolute top-3 inset-x-3 mx-auto max-w-sm bg-amber-500/90 text-slate-950 font-medium px-3 py-1.5 rounded-lg text-xs flex items-center justify-between shadow-lg hidden">
+          <span class="flex items-center gap-1.5"><i data-lucide="sun-medium" class="w-4 h-4"></i> Low or uneven lighting detected. Try facing natural light.</span>
+          <button onclick="document.getElementById('lightWarning').classList.add('hidden')" class="hover:text-white">&times;</button>
+        </div>
+
+      </div>
+
+      <!-- Camera Toolbar -->
+      <div class="bg-slate-900 border border-slate-800 rounded-xl p-3 flex flex-wrap items-center justify-between gap-3">
+        <div class="flex items-center gap-2">
+          <button id="toggleCameraBtn" class="p-2.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 transition border border-slate-700" title="Switch Camera or Reconnect">
+            <i data-lucide="switch-camera" class="w-4 h-4"></i>
+          </button>
+          <button id="toggleDrapeBtn" class="px-3 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-medium text-slate-200 border border-slate-700 flex items-center gap-1.5">
+            <i data-lucide="shirt" class="w-4 h-4 text-rose-400"></i> Toggle Drape
+          </button>
+          <button id="sampleMethodBtn" class="px-3 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-medium text-slate-200 border border-slate-700 flex items-center gap-1.5">
+            <i data-lucide="crosshair" class="w-4 h-4 text-emerald-400"></i> <span id="sampleModeLabel">3-Point Sampling</span>
+          </button>
+        </div>
+
+        <button id="analyzeBtn" class="px-6 py-2.5 rounded-xl bg-gradient-to-r from-rose-500 to-amber-500 hover:from-rose-600 hover:to-amber-600 font-semibold text-white text-sm shadow-lg shadow-rose-500/25 transition transform active:scale-95 flex items-center gap-2">
+          <i data-lucide="wand-2" class="w-4 h-4"></i>
+          Analyze My Colors
+        </button>
+      </div>
+
+      <!-- Quick Virtual Fabric Draping Swatches -->
+      <div class="bg-slate-900/60 border border-slate-800/80 rounded-xl p-3">
+        <div class="flex items-center justify-between mb-2">
+          <span class="text-xs font-semibold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+            <i data-lucide="palette" class="w-3.5 h-3.5 text-slate-300"></i> Test Drapes Under Your Face
+          </span>
+          <span class="text-[11px] text-slate-500">Tap color to drape</span>
+        </div>
+        <div id="drapeSwatches" class="flex gap-2 overflow-x-auto pb-1 no-scrollbar">
+          <!-- Swatches rendered by JS -->
+        </div>
+      </div>
+    </div>
+
+    <!-- Right Column: Scientific Breakdown & Personalized Results -->
+    <div class="lg:col-span-5 flex flex-col space-y-4">
+
+      <!-- Real-time Tone Detection Card -->
+      <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl">
+        <div class="flex items-center justify-between border-b border-slate-800 pb-3 mb-4">
+          <h2 class="font-bold text-sm tracking-wide uppercase text-slate-300 flex items-center gap-2">
+            <i data-lucide="scan" class="w-4 h-4 text-rose-400"></i> Biometric Color Extraction
+          </h2>
+          <span id="analysisStatusBadge" class="text-[11px] font-semibold px-2.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+            Live Ready
+          </span>
+        </div>
+
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
+          <div class="bg-slate-950/60 p-2.5 rounded-xl border border-slate-800/80 text-center">
+            <span class="text-[10px] text-slate-400 font-semibold uppercase">Extracted Skin</span>
+            <div id="sampledColorBox" class="w-full h-8 rounded-lg mt-1.5 border border-white/20 shadow-inner bg-[#E2B193]"></div>
+            <span id="sampledHexLabel" class="text-xs font-mono font-medium text-slate-300 mt-1 block">#E2B193</span>
+          </div>
+
+          <div class="bg-slate-950/60 p-2.5 rounded-xl border border-slate-800/80 text-center">
+            <span class="text-[10px] text-slate-400 font-semibold uppercase">Undertone</span>
+            <div id="undertoneResult" class="text-sm font-bold text-amber-300 mt-2.5">Warm (Golden)</div>
+            <span id="undertoneConfidence" class="text-[10px] text-slate-400">ΔE: Balanced</span>
+          </div>
+
+          <div class="bg-slate-950/60 p-2.5 rounded-xl border border-slate-800/80 text-center">
+            <span class="text-[10px] text-slate-400 font-semibold uppercase">Depth / ITA°</span>
+            <div id="depthResult" class="text-sm font-bold text-slate-200 mt-2.5">Medium Light</div>
+            <span id="itaDegrees" class="text-[10px] text-slate-400">ITA: 34.2°</span>
+          </div>
+
+          <div class="bg-slate-950/60 p-2.5 rounded-xl border border-slate-800/80 text-center">
+            <span class="text-[10px] text-slate-400 font-semibold uppercase">Contrast Value</span>
+            <div id="contrastResult" class="text-sm font-bold text-teal-300 mt-2.5">Medium-Soft</div>
+            <span id="chromaResult" class="text-[10px] text-slate-400">Chroma: 28</span>
+          </div>
+        </div>
+
+        <!-- Color Temperature Gauge -->
+        <div class="space-y-1.5">
+          <div class="flex justify-between text-xs font-medium">
+            <span class="text-sky-400">Cool / Blue Hue</span>
+            <span class="text-slate-400 text-[11px]" id="tempScoreLabel">Warm Leaning (+12)</span>
+            <span class="text-amber-400">Warm / Yellow Hue</span>
+          </div>
+          <div class="relative h-2.5 bg-gradient-to-r from-sky-500 via-purple-400 to-amber-500 rounded-full overflow-visible">
+            <div id="tempPointer" class="absolute top-1/2 -translate-y-1/2 w-4 h-4 rounded-full bg-white shadow-md border-2 border-slate-900 -ml-2 transition-all duration-500" style="left: 65%;"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Seasonal Archetype Result Section (Target of PNG Download) -->
+      <div id="seasonResultCard" class="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl flex-1 flex flex-col justify-between relative overflow-hidden">
+        <div>
+          <!-- Card Header / Watermark info for exported snapshot -->
+          <div class="flex items-center justify-between text-[11px] font-mono uppercase tracking-widest text-slate-500 border-b border-slate-800/80 pb-2.5 mb-3.5">
+            <span class="flex items-center gap-1.5 text-rose-400 font-bold">
+              <i data-lucide="sparkles" class="w-3.5 h-3.5"></i> AuraTone Palette Profile
+            </span>
+            <span id="cardDateLabel" class="text-slate-400">Verified Analysis</span>
+          </div>
+
+          <div class="flex items-start justify-between">
+            <div>
+              <span class="text-xs font-bold uppercase tracking-widest text-rose-400">Your Seasonal Palette</span>
+              <h3 id="seasonTitle" class="text-2xl font-black text-white mt-0.5">True Autumn</h3>
+              <p id="seasonSubtitle" class="text-xs text-slate-400 font-medium">Warm, Rich, and Earthy Harmonies</p>
+            </div>
+            <div id="seasonIconContainer" class="w-12 h-12 rounded-2xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400 text-xl font-bold">
+              🍂
+            </div>
+          </div>
+
+          <p id="seasonDescription" class="text-xs text-slate-300 mt-3 leading-relaxed">
+            Your skin features rich, warm golden undertones with moderate to high depth. Clear earth tones like terracotta, forest moss, and warm mustard elevate your natural complexion while icy pastels may wash you out.
+          </p>
+
+          <!-- Core Palette Swatches -->
+          <div class="mt-4">
+            <div class="flex items-center justify-between text-xs font-semibold text-slate-400 mb-2">
+              <span>Best Signature Hues</span>
+              <span class="text-[10px] text-slate-500">Tap hex to copy</span>
+            </div>
+            <div id="paletteSwatches" class="grid grid-cols-5 sm:grid-cols-6 gap-2">
+              <!-- Dynamically populated -->
+            </div>
+          </div>
+
+          <!-- Color Match Advice Tabs -->
+          <div class="mt-4 grid grid-cols-2 gap-3 text-xs">
+            <div class="bg-slate-950/60 p-3 rounded-xl border border-slate-800">
+              <span class="font-bold text-emerald-400 flex items-center gap-1 mb-1">
+                <i data-lucide="check-circle" class="w-3.5 h-3.5"></i> Power Colors
+              </span>
+              <p id="powerColorsText" class="text-slate-300 text-[11px] leading-relaxed">
+                Rust, olive green, warm camel, deep pumpkin, and rich espresso.
+              </p>
+            </div>
+            <div class="bg-slate-950/60 p-3 rounded-xl border border-slate-800">
+              <span class="font-bold text-rose-400 flex items-center gap-1 mb-1">
+                <i data-lucide="x-circle" class="w-3.5 h-3.5"></i> Avoid / Displace
+              </span>
+              <p id="avoidColorsText" class="text-slate-300 text-[11px] leading-relaxed">
+                Icy blues, stark optic white, fuchsia pink, and frosty grey.
+              </p>
+            </div>
+          </div>
+
+          <!-- Jewelry & Makeup Recommendation -->
+          <div class="mt-3 bg-slate-950/60 p-3 rounded-xl border border-slate-800 flex items-center justify-between text-xs">
+            <div class="flex items-center gap-2">
+              <i data-lucide="gem" class="w-4 h-4 text-amber-400"></i>
+              <div>
+                <span class="font-bold text-slate-200">Recommended Metals:</span>
+                <span id="metalRecommendation" class="text-slate-400 ml-1">Yellow Gold, Antique Brass, Copper</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Export Footnote (Branding printed on the downloaded screenshot) -->
+        <div id="cardWatermarkFooter" class="mt-3 pt-3 border-t border-slate-800/80 text-[10px] text-slate-500 flex items-center justify-between">
+          <span>AuraTone Biometric Studio</span>
+          <span>auratone.ai</span>
+        </div>
+
+        <!-- Interactive Toolbar (Excluded from the PNG download) -->
+        <div class="no-export mt-4 pt-4 border-t border-slate-800 flex items-center justify-between">
+          <button id="copySummaryBtn" class="text-xs text-slate-300 hover:text-white flex items-center gap-1.5 transition">
+            <i data-lucide="copy" class="w-3.5 h-3.5"></i> Copy Palette Details
+          </button>
+          <div class="flex gap-1.5">
+            <button id="saveLookBtn" class="text-xs bg-gradient-to-r from-rose-500 to-amber-500 hover:from-rose-600 hover:to-amber-600 text-white font-medium px-3.5 py-1.5 rounded-lg shadow-md shadow-rose-500/20 transition flex items-center gap-1.5 active:scale-95">
+              <i data-lucide="download" class="w-3.5 h-3.5"></i> Save Card (.png)
+            </button>
+          </div>
+        </div>
+
+      </div>
+
+    </div>
+  </main>
+
+  <!-- Educational Guide Drawer / Modal -->
+  <section class="max-w-6xl w-full mx-auto px-4 sm:px-6 pb-12 mt-6">
+    <div class="bg-slate-900 border border-slate-800 rounded-2xl p-6">
+      <h3 class="text-base font-bold text-slate-200 flex items-center gap-2 mb-4">
+        <i data-lucide="info" class="w-4 h-4 text-amber-400"></i> How the 12-Season Method Works
+      </h3>
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs text-slate-400">
+        <div class="bg-slate-950/70 p-4 rounded-xl border border-slate-800/80">
+          <h4 class="font-semibold text-slate-200 mb-1 flex items-center gap-1.5">
+            <span class="w-2 h-2 rounded-full bg-rose-400"></span> 1. Undertone (Temperature)
+          </h4>
+          <p class="leading-relaxed">
+            Measures the subtle pigment just under your epidermis. Warm undertones have higher carotene and golden pigments; Cool undertones reflect higher hemoglobin and blue-pink balance; Neutral balances both.
+          </p>
+        </div>
+        <div class="bg-slate-950/70 p-4 rounded-xl border border-slate-800/80">
+          <h4 class="font-semibold text-slate-200 mb-1 flex items-center gap-1.5">
+            <span class="w-2 h-2 rounded-full bg-amber-400"></span> 2. Value / Depth (Light vs. Dark)
+          </h4>
+          <p class="leading-relaxed">
+            Derived using Individual Typology Angle ($ITA^\circ = \frac{\arctan(\frac{L^* - 50}{b^*}) \times 180}{\pi}$). This sets the lightness or richness of the optimal palette to prevent skin from appearing shadowy or drained.
+          </p>
+        </div>
+        <div class="bg-slate-950/70 p-4 rounded-xl border border-slate-800/80">
+          <h4 class="font-semibold text-slate-200 mb-1 flex items-center gap-1.5">
+            <span class="w-2 h-2 rounded-full bg-teal-400"></span> 3. Chroma (Clear vs. Muted)
+          </h4>
+          <p class="leading-relaxed">
+            High chroma features can support vivid, saturated gemstone hues (Winter / Spring). Soft, muted features look best in dusty, desaturated, greyed-out shades (Summer / Autumn).
+          </p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Notification Toast -->
+  <div id="toast" class="fixed bottom-5 right-5 bg-slate-800 border border-slate-700 text-white text-xs px-4 py-2.5 rounded-xl shadow-2xl transition-all duration-300 transform translate-y-20 opacity-0 pointer-events-none z-50 flex items-center gap-2">
+    <i data-lucide="check" class="w-4 h-4 text-emerald-400"></i>
+    <span id="toastMsg">Copied to clipboard</span>
+  </div>
+
+  <script>
+    // --- SEASONAL PALETTES DICTIONARY (12 Detailed Sub-Seasons) ---
+    const PALETTES = {
+      light_spring: {
+        title: "Light Spring",
+        subtitle: "Warm, Light, & Radiantly Bright",
+        icon: "🌸",
+        description: "Your undertone is warm and glowing with high lightness. Muted heavy blacks can overwhelm your features, while fresh peach, warm aqua, and sunny buttercups illuminate your face.",
+        colors: ["#FFA07A", "#FFD700", "#98FB98", "#AFEEEE", "#FFB6C1", "#FFE4B5"],
+        power: "Peach puff, buttercup yellow, soft apricot, aqua green, and warm coral.",
+        avoid: "Heavy charcoal, jet black, stark white, and burgundy.",
+        metals: "Light yellow gold, warm rose gold, polished brass"
+      },
+      warm_spring: {
+        title: "True / Warm Spring",
+        subtitle: "Golden, Vivid, & Sun-Drenched",
+        icon: "🌻",
+        description: "Your undertones have distinct golden vitality. You radiate in saturated, warm, sun-kissed colors with no grey dustiness.",
+        colors: ["#FF7F50", "#FF6347", "#32CD32", "#FFD700", "#40E0D0", "#FF8C00"],
+        power: "Bright coral, poppy red, golden marigold, lime green, and tropical turquoise.",
+        avoid: "Muted mauve, lavender, dusty blues, and cool berry tones.",
+        metals: "Rich yellow gold, copper, warm polished bronze"
+      },
+      bright_spring: {
+        title: "Bright / Clear Spring",
+        subtitle: "High Contrast, Warm, & Strikingly Clear",
+        icon: "🌷",
+        description: "You have sparkling clarity with warm undertones. You hold vivid jewel colors that would drown softer archetypes.",
+        colors: ["#FF1493", "#00FA9A", "#FF4500", "#1E90FF", "#FFFF00", "#FF69B4"],
+        power: "Flamingo pink, bright emerald, warm cobalt, vivid tangerine, and sunshine yellow.",
+        avoid: "Muted earth tones, dusty taupe, and muddy greys.",
+        metals: "Shiny bright yellow gold, high-polish rose gold"
+      },
+      light_summer: {
+        title: "Light Summer",
+        subtitle: "Cool, Soft, & Delicately Powdered",
+        icon: "🪻",
+        description: "Soft cool undertones with light values. You shine in misty, watercolor pastel tones that soften harsh shadows on the skin.",
+        colors: ["#B0E0E6", "#E6E6FA", "#FFB6C1", "#D8BFD8", "#87CEEB", "#F0E68C"],
+        power: "Powder blue, soft lavender, English rose pink, baby mint, and heather grey.",
+        avoid: "Heavy black, terracotta, mustard yellow, and orange.",
+        metals: "Polished silver, white gold, platinum"
+      },
+      cool_summer: {
+        title: "True / Cool Summer",
+        subtitle: "Cascading Blue Tones, Pure & Elegant",
+        icon: "🌊",
+        description: "Your skin undertone has an unmistakable cool blue-pink balance with no warmth. Cool jewel-pastels and slate hues enhance your eyes.",
+        colors: ["#6495ED", "#4682B4", "#DB7093", "#9370DB", "#C0C0C0", "#5F9EA0"],
+        power: "Cornflower blue, periwinkle, berry rose, soft navy, and twilight slate.",
+        avoid: "Warm rust, orange, camel, gold, and olive green.",
+        metals: "Antique silver, sterling silver, white gold"
+      },
+      soft_summer: {
+        title: "Soft Summer",
+        subtitle: "Muted, Velvety, & Smoky Grey-Cool",
+        icon: "🌫️",
+        description: "A neutral-cool balance with gentle greyed undertones. High saturation overwhelms you; delicate, smokey hues harmonize seamlessly.",
+        colors: ["#778899", "#BC8F8F", "#8FBC8F", "#B0C4DE", "#9999AA", "#C5A0A6"],
+        power: "Dusty mauve, slate teal, smoked rose, sage green, and cadet grey.",
+        avoid: "Neon brights, electric lime, stark orange, and patent black.",
+        metals: "Brushed silver, pewter, soft white gold"
+      },
+      soft_autumn: {
+        title: "Soft Autumn",
+        subtitle: "Gentle, Warm, & Sun-Faded Earth",
+        icon: "🌾",
+        description: "Warm neutral undertone diffused with a soft haze. Gentle mosses, rose golds, and desert sand flatter you without harshness.",
+        colors: ["#D2B48C", "#BDB76B", "#CD853F", "#E9967A", "#8FBC8F", "#A0522D"],
+        power: "Warm sand, sage moss, terracotta rose, muted cinnamon, and soft olive.",
+        avoid: "Vivid magenta, electric cyan, cool lavender, and pitch black.",
+        metals: "Rose gold, brushed antique bronze, satin gold"
+      },
+      warm_autumn: {
+        title: "True / Warm Autumn",
+        subtitle: "Rich, Amber, & Deep Golden Earth",
+        icon: "🍂",
+        description: "Deep, golden undertones with glowing warmth. Your natural palette contains forest moss, roasted spices, and burnt amber tones.",
+        colors: ["#8B4513", "#D2691E", "#556B2F", "#CC5500", "#DAA520", "#800000"],
+        power: "Burnt orange, olive drab, spiced pumpkin, camel brown, and mustard gold.",
+        avoid: "Baby blue, cool fuchsia, frosty pink, and stark optic white.",
+        metals: "Yellow gold, antique brass, copper, beaten bronze"
+      },
+      dark_autumn: {
+        title: "Deep / Dark Autumn",
+        subtitle: "Intense, Sultry, Warm & Deeply Pigmented",
+        icon: "🌰",
+        description: "Rich and saturated with warm undertones. You have sufficient contrast to wear intense, sultry shades without losing your facial focus.",
+        colors: ["#4A0E17", "#2F4F4F", "#800020", "#5C4033", "#B8860B", "#1C392B"],
+        power: "Deep forest green, dark espresso, oxblood, golden ochre, and warm burgundy.",
+        avoid: "Pale chalky pastels, baby pink, cool grey, and silver.",
+        metals: "Dark antique gold, copper, warm gunmetal"
+      },
+      bright_winter: {
+        title: "Bright / Clear Winter",
+        subtitle: "Crisp, Electric, & High-Contrast Cool",
+        icon: "❄️",
+        description: "Vibrant and striking with cool undertones. You command high contrast and saturate your features with jewel-toned brilliance.",
+        colors: ["#0000FF", "#FF007F", "#00FF7F", "#00FFFF", "#FFFFFF", "#111111"],
+        power: "Electric blue, pure ruby red, shocking pink, optic snow white, and emerald.",
+        avoid: "Muted beige, dirty olive, rusty orange, and mustard yellow.",
+        metals: "High-shine platinum, polished chrome, white gold"
+      },
+      cool_winter: {
+        title: "True / Cool Winter",
+        subtitle: "Frosted, Regal, & Pure Royal Chill",
+        icon: "💎",
+        description: "Your undertones are purely cool with zero yellow influence. You match with icy silvers, pine teals, and regal sapphire blues.",
+        colors: ["#000080", "#4B0082", "#C71585", "#008080", "#E0FFFF", "#000000"],
+        power: "Royal cobalt, magenta, icy lavender, true black, and jewel emerald.",
+        avoid: "Warm copper, camel, orange, peach, and golden mustard.",
+        metals: "Pure platinum, 925 sterling silver, rhodium"
+      },
+      dark_winter: {
+        title: "Deep / Dark Winter",
+        subtitle: "Dramatic, Enigmatic, & Midnight Contrast",
+        icon: "🌌",
+        description: "Deep pigment with cool dominance. You carry rich dark depth that anchors against striking high-contrast accents.",
+        colors: ["#191970", "#480607", "#2E0854", "#0A2F35", "#FFFFFF", "#0A0A0A"],
+        power: "Midnight navy, black cherry, dark plum, deep teal, and jet black.",
+        avoid: "Warm terracotta, light yellow peach, and faded warm tan.",
+        metals: "Polished white gold, blackened silver, platinum"
+      }
+    };
+
+    // Virtual Draping Swatches List
+    const DRAPE_PRESETS = [
+      { name: "Powder Blue", left: "#93c5fd", right: "#60a5fa", season: "Summer" },
+      { name: "Warm Terracotta", left: "#ea580c", right: "#c2410c", season: "Autumn" },
+      { name: "Emerald Jewel", left: "#059669", right: "#047857", season: "Winter" },
+      { name: "Golden Marigold", left: "#f59e0b", right: "#d97706", season: "Spring" },
+      { name: "Blush Rose", left: "#f472b6", right: "#db2777", season: "Summer" },
+      { name: "Royal Midnight", left: "#1e1b4b", right: "#0f172a", season: "Winter" },
+      { name: "Olive Moss", left: "#65a30d", right: "#4d7c0f", season: "Autumn" },
+      { name: "Coral Poppy", left: "#fb7185", right: "#e11d48", season: "Spring" }
+    ];
+
+    // State Variables
+    let currentStream = null;
+    let isLiveVideo = true;
+    let currentFacingMode = "user";
+    let drapeVisible = true;
+    let samplingMode = "multi"; // 'multi' or 'single'
+    let currentPaletteKey = "warm_autumn";
+    let capturedSkinData = { r: 215, g: 165, b: 135 };
+
+    // DOM Elements
+    const video = document.getElementById('webcam');
+    const canvas = document.getElementById('analysisCanvas');
+    const snapshotImg = document.getElementById('snapshotImg');
+    const analyzeBtn = document.getElementById('analyzeBtn');
+    const toggleCameraBtn = document.getElementById('toggleCameraBtn');
+    const toggleDrapeBtn = document.getElementById('toggleDrapeBtn');
+    const sampleMethodBtn = document.getElementById('sampleMethodBtn');
+    const sampleModeLabel = document.getElementById('sampleModeLabel');
+    const demoBtn = document.getElementById('demoBtn');
+    const resetAppBtn = document.getElementById('resetAppBtn');
+    const loadingOverlay = document.getElementById('loadingOverlay');
+    const lightWarning = document.getElementById('lightWarning');
+    const virtualDrapeCollar = document.getElementById('virtualDrapeCollar');
+    const drapePathLeft = document.getElementById('drapePathLeft');
+    const drapePathRight = document.getElementById('drapePathRight');
+    const drapeLabel = document.getElementById('drapeLabel');
+    const drapeSwatchesContainer = document.getElementById('drapeSwatches');
+
+    // Analysis Metric Elements
+    const sampledColorBox = document.getElementById('sampledColorBox');
+    const sampledHexLabel = document.getElementById('sampledHexLabel');
+    const undertoneResult = document.getElementById('undertoneResult');
+    const depthResult = document.getElementById('depthResult');
+    const contrastResult = document.getElementById('contrastResult');
+    const itaDegrees = document.getElementById('itaDegrees');
+    const chromaResult = document.getElementById('chromaResult');
+    const tempPointer = document.getElementById('tempPointer');
+    const tempScoreLabel = document.getElementById('tempScoreLabel');
+
+    // Seasonal Card Elements
+    const seasonResultCard = document.getElementById('seasonResultCard');
+    const seasonTitle = document.getElementById('seasonTitle');
+    const seasonSubtitle = document.getElementById('seasonSubtitle');
+    const seasonDescription = document.getElementById('seasonDescription');
+    const seasonIconContainer = document.getElementById('seasonIconContainer');
+    const paletteSwatches = document.getElementById('paletteSwatches');
+    const powerColorsText = document.getElementById('powerColorsText');
+    const avoidColorsText = document.getElementById('avoidColorsText');
+    const metalRecommendation = document.getElementById('metalRecommendation');
+    const copySummaryBtn = document.getElementById('copySummaryBtn');
+    const saveLookBtn = document.getElementById('saveLookBtn');
+    const toast = document.getElementById('toast');
+    const toastMsg = document.getElementById('toastMsg');
+    const cardDateLabel = document.getElementById('cardDateLabel');
+
+    // Initialize Icons
+    lucide.createIcons();
+
+    // 1. Initialize Camera
+    async function startCamera() {
+      if (currentStream) {
+        currentStream.getTracks().forEach(track => track.stop());
+      }
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: {
+            facingMode: currentFacingMode,
+            width: { ideal: 1280 },
+            height: { ideal: 720 }
+          },
+          audio: false
+        });
+        currentStream = stream;
+        video.srcObject = stream;
+        video.classList.remove('hidden');
+        snapshotImg.classList.add('hidden');
+        isLiveVideo = true;
+      } catch (err) {
+        console.warn("Webcam access rejected or not available. Loading demo portrait mode.", err);
+        loadDemoPortrait();
+      }
+    }
+
+    // Toggle Camera (Front/Rear or Reconnect)
+    toggleCameraBtn.addEventListener('click', () => {
+      currentFacingMode = currentFacingMode === "user" ? "environment" : "user";
+      startCamera();
+      showToast(`Switched camera to: ${currentFacingMode === "user" ? "Front" : "Back"}`);
+    });
+
+    // Toggle Drape Layer
+    toggleDrapeBtn.addEventListener('click', () => {
+      drapeVisible = !drapeVisible;
+      virtualDrapeCollar.style.display = drapeVisible ? 'flex' : 'none';
+    });
+
+    // Toggle Sampling Mode
+    sampleMethodBtn.addEventListener('click', () => {
+      samplingMode = samplingMode === "multi" ? "single" : "multi";
+      sampleModeLabel.textContent = samplingMode === "multi" ? "3-Point Sampling" : "Center Cheek Sampling";
+      showToast(`Sampling: ${sampleModeLabel.textContent}`);
+    });
+
+    // Render Virtual Draping Swatches
+    function renderDrapePresets() {
+      drapeSwatchesContainer.innerHTML = '';
+      DRAPE_PRESETS.forEach(preset => {
+        const btn = document.createElement('button');
+        btn.className = "flex-shrink-0 flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs font-medium text-slate-300 transition";
+        btn.innerHTML = `
+          <span class="w-3.5 h-3.5 rounded-full border border-white/20" style="background: linear-gradient(135deg, ${preset.left}, ${preset.right})"></span>
+          <span>${preset.name}</span>
+        `;
+        btn.addEventListener('click', () => {
+          applyDrapeColor(preset.left, preset.right, preset.name);
+        });
+        drapeSwatchesContainer.appendChild(btn);
+      });
+    }
+
+    function applyDrapeColor(color1, color2, label) {
+      drapePathLeft.setAttribute('fill', color1);
+      drapePathRight.setAttribute('fill', color2);
+      drapeLabel.textContent = `Drape: ${label}`;
+      virtualDrapeCollar.style.display = 'flex';
+      drapeVisible = true;
+    }
+
+    // Color Space Calculations: RGB to CIE Lab & ITA (Individual Typology Angle)
+    function rgbToLab(r, g, b) {
+      let [nr, ng, nb] = [r / 255, g / 255, b / 255].map(v => {
+        return v > 0.04045 ? Math.pow((v + 0.055) / 1.055, 2.4) : v / 12.92;
+      });
+
+      let x = (nr * 0.4124 + ng * 0.3576 + nb * 0.1805) / 0.95047;
+      let y = (nr * 0.2126 + ng * 0.7152 + nb * 0.0722) / 1.00000;
+      let z = (nr * 0.0193 + ng * 0.1192 + nb * 0.9505) / 1.08883;
+
+      [x, y, z] = [x, y, z].map(v => {
+        return v > 0.008856 ? Math.cbrt(v) : (7.787 * v) + (16 / 116);
+      });
+
+      const L = (116 * y) - 16;
+      const a = 500 * (x - y);
+      const b_val = 200 * (y - z);
+      return { L, a, b: b_val };
+    }
+
+    function rgbToHsv(r, g, b) {
+      r /= 255; g /= 255; b /= 255;
+      const max = Math.max(r, g, b), min = Math.min(r, g, b);
+      let h, s, v = max;
+      const d = max - min;
+      s = max === 0 ? 0 : d / max;
+      if (max === min) {
+        h = 0;
+      } else {
+        switch (max) {
+          case r: h = (g - b) / d + (g < b ? 6 : 0); break;
+          case g: h = (b - r) / d + 2; break;
+          case b: h = (r - g) / d + 4; break;
+        }
+        h /= 6;
+      }
+      return { h: Math.round(h * 360), s: Math.round(s * 100), v: Math.round(v * 100) };
+    }
+
+    // Core Seasonal Classifier Logic
+    function classifyPersonalColor(r, g, b) {
+      const { L, a, b: labB } = rgbToLab(r, g, b);
+      const { h, s, v } = rgbToHsv(r, g, b);
+
+      let ita = Math.atan2((L - 50), labB) * (180 / Math.PI);
+      if (isNaN(ita)) ita = 30;
+
+      const warmFactor = (r - b) + (labB * 1.5);
+      const isWarm = warmFactor > 60;
+      const isNeutral = Math.abs(warmFactor - 50) < 12;
+
+      let depth = "Medium";
+      if (L > 68 || ita > 42) depth = "Light";
+      else if (L < 48 || ita < 12) depth = "Deep";
+
+      const chroma = Math.sqrt(a * a + labB * labB);
+      const isClear = chroma > 28;
+
+      let matchedKey = "warm_autumn";
+
+      if (isWarm && !isNeutral) {
+        if (depth === "Light") {
+          matchedKey = isClear ? "bright_spring" : "light_spring";
+        } else if (depth === "Deep") {
+          matchedKey = "dark_autumn";
+        } else {
+          matchedKey = isClear ? "warm_spring" : "warm_autumn";
+        }
+      } else if (!isWarm && !isNeutral) {
+        if (depth === "Light") {
+          matchedKey = isClear ? "light_summer" : "soft_summer";
+        } else if (depth === "Deep") {
+          matchedKey = isClear ? "cool_winter" : "dark_winter";
+        } else {
+          matchedKey = isClear ? "bright_winter" : "cool_summer";
+        }
+      } else {
+        if (depth === "Light") matchedKey = "light_summer";
+        else if (depth === "Deep") matchedKey = "dark_autumn";
+        else matchedKey = isClear ? "warm_spring" : "soft_autumn";
+      }
+
+      return {
+        matchedKey,
+        isWarm,
+        isNeutral,
+        depth,
+        ita: Math.round(ita * 10) / 10,
+        chroma: Math.round(chroma),
+        L: Math.round(L),
+        warmScore: Math.round(warmFactor)
+      };
+    }
+
+    // Sample color pixels from canvas
+    function sampleRegionColor(ctx, cx, cy, radius = 8) {
+      const imgData = ctx.getImageData(cx - radius, cy - radius, radius * 2, radius * 2).data;
+      let totalR = 0, totalG = 0, totalB = 0, count = 0;
+
+      for (let i = 0; i < imgData.length; i += 4) {
+        const brightness = (imgData[i] + imgData[i+1] + imgData[i+2]) / 3;
+        if (brightness > 25 && brightness < 240) {
+          totalR += imgData[i];
+          totalG += imgData[i+1];
+          totalB += imgData[i+2];
+          count++;
+        }
+      }
+
+      if (count === 0) return { r: 210, g: 160, b: 130 };
+      return {
+        r: Math.round(totalR / count),
+        g: Math.round(totalG / count),
+        b: Math.round(totalB / count)
+      };
+    }
+
+    // Trigger Analysis Run
+    analyzeBtn.addEventListener('click', async () => {
+      loadingOverlay.classList.remove('hidden');
+
+      setTimeout(() => {
+        executeColorAnalysis();
+      }, 400);
+    });
+
+    function executeColorAnalysis() {
+      canvas.width = video.videoWidth || 640;
+      canvas.height = video.videoHeight || 480;
+      const ctx = canvas.getContext('2d');
+
+      if (isLiveVideo && video.videoWidth) {
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      } else {
+        ctx.drawImage(snapshotImg, 0, 0, canvas.width, canvas.height);
+      }
+
+      const w = canvas.width;
+      const h = canvas.height;
+
+      let samples = [];
+      if (samplingMode === "multi") {
+        samples.push(sampleRegionColor(ctx, Math.floor(w * 0.42), Math.floor(h * 0.52), 10));
+        samples.push(sampleRegionColor(ctx, Math.floor(w * 0.58), Math.floor(h * 0.52), 10));
+        samples.push(sampleRegionColor(ctx, Math.floor(w * 0.50), Math.floor(h * 0.38), 10));
+      } else {
+        samples.push(sampleRegionColor(ctx, Math.floor(w * 0.45), Math.floor(h * 0.52), 16));
+      }
+
+      const avgR = Math.round(samples.reduce((a, b) => a + b.r, 0) / samples.length);
+      const avgG = Math.round(samples.reduce((a, b) => a + b.g, 0) / samples.length);
+      const avgB = Math.round(samples.reduce((a, b) => a + b.b, 0) / samples.length);
+
+      capturedSkinData = { r: avgR, g: avgG, b: avgB };
+
+      const avgLuma = (avgR * 299 + avgG * 587 + avgB * 114) / 1000;
+      if (avgLuma < 75 || avgLuma > 230) {
+        lightWarning.classList.remove('hidden');
+      } else {
+        lightWarning.classList.add('hidden');
+      }
+
+      const analysis = classifyPersonalColor(avgR, avgG, avgB);
+      currentPaletteKey = analysis.matchedKey;
+
+      updateResultsUI(analysis, avgR, avgG, avgB);
+
+      loadingOverlay.classList.add('hidden');
+      showToast(`Analysis Complete: ${PALETTES[analysis.matchedKey].title}`);
+    }
+
+    function componentToHex(c) {
+      const hex = c.toString(16);
+      return hex.length === 1 ? "0" + hex : hex;
+    }
+    function rgbToHex(r, g, b) {
+      return "#" + componentToHex(r) + componentToHex(g) + componentToHex(b);
+    }
+
+    // Update Result Panels
+    function updateResultsUI(analysis, r, g, b) {
+      const hex = rgbToHex(r, g, b).toUpperCase();
+      sampledColorBox.style.backgroundColor = hex;
+      sampledHexLabel.textContent = hex;
+
+      if (cardDateLabel) {
+        cardDateLabel.textContent = new Date().toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+      }
+
+      if (analysis.isNeutral) {
+        undertoneResult.textContent = "Neutral";
+        undertoneResult.className = "text-sm font-bold text-teal-300 mt-2.5";
+      } else if (analysis.isWarm) {
+        undertoneResult.textContent = "Warm (Golden)";
+        undertoneResult.className = "text-sm font-bold text-amber-400 mt-2.5";
+      } else {
+        undertoneResult.textContent = "Cool (Rosy/Blue)";
+        undertoneResult.className = "text-sm font-bold text-sky-400 mt-2.5";
+      }
+
+      depthResult.textContent = `${analysis.depth}`;
+      itaDegrees.textContent = `ITA: ${analysis.ita}°`;
+      chromaResult.textContent = `Chroma: ${analysis.chroma}`;
+
+      const clampedScore = Math.max(10, Math.min(90, analysis.warmScore));
+      tempPointer.style.left = `${clampedScore}%`;
+      tempScoreLabel.textContent = analysis.isWarm ? `Warm Shift (+${analysis.warmScore})` : `Cool Shift (${analysis.warmScore})`;
+
+      const season = PALETTES[analysis.matchedKey];
+      seasonTitle.textContent = season.title;
+      seasonSubtitle.textContent = season.subtitle;
+      seasonDescription.textContent = season.description;
+      seasonIconContainer.textContent = season.icon;
+      powerColorsText.textContent = season.power;
+      avoidColorsText.textContent = season.avoid;
+      metalRecommendation.textContent = season.metals;
+
+      paletteSwatches.innerHTML = '';
+      season.colors.forEach(hexColor => {
+        const swatch = document.createElement('div');
+        swatch.className = "group relative flex flex-col items-center cursor-pointer transition transform hover:-translate-y-1";
+        swatch.innerHTML = `
+          <div class="w-full h-12 rounded-lg shadow-sm border border-white/20 transition group-hover:ring-2 group-hover:ring-white" style="background-color: ${hexColor}"></div>
+          <span class="text-[10px] font-mono text-slate-400 mt-1 uppercase opacity-80 group-hover:opacity-100">${hexColor}</span>
+        `;
+        swatch.addEventListener('click', () => {
+          copyToClipboard(hexColor);
+          applyDrapeColor(hexColor, hexColor, hexColor);
+        });
+        paletteSwatches.appendChild(swatch);
+      });
+
+      if (season.colors.length >= 2) {
+        applyDrapeColor(season.colors[0], season.colors[1], season.title);
+      }
+    }
+
+    // Demo portrait fallback image loader
+    function loadDemoPortrait() {
+      isLiveVideo = false;
+      video.classList.add('hidden');
+      snapshotImg.classList.remove('hidden');
+
+      snapshotImg.src = "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=800&q=80";
+      snapshotImg.crossOrigin = "anonymous";
+      snapshotImg.onload = () => {
+        executeColorAnalysis();
+      };
+      showToast("Loaded high-definition demo portrait");
+    }
+
+    demoBtn.addEventListener('click', () => {
+      loadDemoPortrait();
+    });
+
+    resetAppBtn.addEventListener('click', () => {
+      startCamera();
+      showToast("App reset to live camera");
+    });
+
+    function showToast(message) {
+      toastMsg.textContent = message;
+      toast.classList.remove('translate-y-20', 'opacity-0', 'pointer-events-none');
+      setTimeout(() => {
+        toast.classList.add('translate-y-20', 'opacity-0', 'pointer-events-none');
+      }, 2600);
+    }
+
+    function copyToClipboard(text) {
+      const el = document.createElement('textarea');
+      el.value = text;
+      document.body.appendChild(el);
+      el.select();
+      document.execCommand('copy');
+      document.body.removeChild(el);
+      showToast(`Copied ${text} to clipboard!`);
+    }
+
+    copySummaryBtn.addEventListener('click', () => {
+      const season = PALETTES[currentPaletteKey];
+      const summary = `AuraTone Personal Color Analysis:\n` +
+        `Season: ${season.title} (${season.subtitle})\n` +
+        `Undertone: ${undertoneResult.textContent} | Depth: ${depthResult.textContent}\n` +
+        `Power Colors: ${season.power}\n` +
+        `Avoid: ${season.avoid}\n` +
+        `Metals: ${season.metals}\n` +
+        `Palette Hex Codes: ${season.colors.join(', ')}`;
+      copyToClipboard(summary);
+    });
+
+    // Helper to download data URLs directly to the local drive
+    function triggerDownload(dataUrl, filename) {
+      const link = document.createElement('a');
+      link.download = filename;
+      link.href = dataUrl;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    }
+
+    // High-Resolution Fallback Canvas Renderer in case html2canvas is restricted
+    function renderFallbackCanvas(season, skinHex) {
+      const c = document.createElement('canvas');
+      c.width = 800;
+      c.height = 980;
+      const ctx = c.getContext('2d');
+
+      // Gradient background
+      const grad = ctx.createLinearGradient(0, 0, 0, c.height);
+      grad.addColorStop(0, '#0f172a');
+      grad.addColorStop(1, '#020617');
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, c.width, c.height);
+
+      // Border outline
+      ctx.strokeStyle = '#1e293b';
+      ctx.lineWidth = 4;
+      ctx.strokeRect(20, 20, c.width - 40, c.height - 40);
+
+      // Header Tag
+      ctx.fillStyle = '#fb7185';
+      ctx.font = 'bold 16px sans-serif';
+      ctx.fillText('AURATONE PERSONAL COLOR ANALYSIS', 50, 75);
+
+      // Date stamp
+      ctx.fillStyle = '#64748b';
+      ctx.font = '14px sans-serif';
+      ctx.fillText(new Date().toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }), 630, 75);
+
+      // Season Title & Icon
+      ctx.fillStyle = '#ffffff';
+      ctx.font = 'bold 36px sans-serif';
+      ctx.fillText(`${season.title} ${season.icon}`, 50, 130);
+
+      // Subtitle
+      ctx.fillStyle = '#94a3b8';
+      ctx.font = '18px sans-serif';
+      ctx.fillText(season.subtitle, 50, 165);
+
+      // Skin Biometrics Row
+      ctx.fillStyle = '#1e293b';
+      ctx.fillRect(50, 195, 700, 70);
+
+      ctx.fillStyle = skinHex;
+      ctx.fillRect(65, 208, 44, 44);
+
+      ctx.fillStyle = '#ffffff';
+      ctx.font = 'bold 15px sans-serif';
+      ctx.fillText(`Sampled Tone: ${skinHex}`, 125, 233);
+
+      ctx.fillStyle = '#94a3b8';
+      ctx.font = '14px sans-serif';
+      ctx.fillText(`Undertone: ${undertoneResult.textContent}  |  Depth: ${depthResult.textContent}  |  ${itaDegrees.textContent}`, 125, 253);
+
+      // Signature Colors
+      ctx.fillStyle = '#cbd5e1';
+      ctx.font = 'bold 18px sans-serif';
+      ctx.fillText('SIGNATURE PALETTE HUES', 50, 310);
+
+      const swatchW = 100;
+      const swatchH = 80;
+      const startX = 50;
+      const startY = 330;
+
+      season.colors.forEach((col, i) => {
+        const x = startX + (i % 6) * 118;
+        const y = startY + Math.floor(i / 6) * 115;
+        ctx.fillStyle = col;
+        ctx.fillRect(x, y, swatchW, swatchH);
+        ctx.fillStyle = '#94a3b8';
+        ctx.font = '12px monospace';
+        ctx.fillText(col.toUpperCase(), x + 15, y + swatchH + 18);
+      });
+
+      // Advice Boxes
+      const adviceY = 480;
+      // Power colors
+      ctx.fillStyle = '#1e293b';
+      ctx.fillRect(50, adviceY, 340, 180);
+      ctx.fillStyle = '#34d399';
+      ctx.font = 'bold 16px sans-serif';
+      ctx.fillText('✓ Power Colors', 65, adviceY + 35);
+      ctx.fillStyle = '#e2e8f0';
+      ctx.font = '14px sans-serif';
+      wrapText(ctx, season.power, 65, adviceY + 68, 305, 22);
+
+      // Avoid colors
+      ctx.fillStyle = '#1e293b';
+      ctx.fillRect(410, adviceY, 340, 180);
+      ctx.fillStyle = '#f87171';
+      ctx.font = 'bold 16px sans-serif';
+      ctx.fillText('✗ Avoid / Displace', 425, adviceY + 35);
+      ctx.fillStyle = '#e2e8f0';
+      ctx.font = '14px sans-serif';
+      wrapText(ctx, season.avoid, 425, adviceY + 68, 305, 22);
+
+      // Metals bar
+      ctx.fillStyle = '#1e293b';
+      ctx.fillRect(50, adviceY + 200, 700, 50);
+      ctx.fillStyle = '#fbbf24';
+      ctx.font = 'bold 15px sans-serif';
+      ctx.fillText('Recommended Metals:', 65, adviceY + 232);
+      ctx.fillStyle = '#cbd5e1';
+      ctx.font = '14px sans-serif';
+      ctx.fillText(season.metals, 240, adviceY + 232);
+
+      // Footer
+      ctx.fillStyle = '#64748b';
+      ctx.font = '12px sans-serif';
+      ctx.fillText('AuraTone AI Personal Color & Virtual Draping Studio', 50, c.height - 35);
+      ctx.fillText('auratone.ai', 680, c.height - 35);
+
+      return c.toDataURL('image/png');
+    }
+
+    function wrapText(ctx, text, x, y, maxWidth, lineHeight) {
+      const words = text.split(' ');
+      let line = '';
+      for (let n = 0; n < words.length; n++) {
+        const testLine = line + words[n] + ' ';
+        const metrics = ctx.measureText(testLine);
+        if (metrics.width > maxWidth && n > 0) {
+          ctx.fillText(line, x, y);
+          line = words[n] + ' ';
+          y += lineHeight;
+        } else {
+          line = testLine;
+        }
+      }
+      ctx.fillText(line, x, y);
+    }
+
+    // Save Card Action: Exports the card as a high-res .PNG screenshot
+    saveLookBtn.addEventListener('click', async () => {
+      const originalText = saveLookBtn.innerHTML;
+      const season = PALETTES[currentPaletteKey];
+      const filename = `auratone-${season.title.toLowerCase().replace(/[^a-z0-9]/g, '-')}-palette.png`;
+
+      try {
+        saveLookBtn.disabled = true;
+        saveLookBtn.innerHTML = `<div class="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></div> Generating...`;
+
+        // Check if html2canvas is available
+        if (typeof html2canvas === 'function') {
+          // Temporarily hide the action buttons row so it doesn't appear in the downloaded PNG
+          const noExportElements = seasonResultCard.querySelectorAll('.no-export');
+          noExportElements.forEach(el => el.style.display = 'none');
+
+          const capturedCanvas = await html2canvas(seasonResultCard, {
+            backgroundColor: '#0f172a',
+            scale: 2, // 2x scale for ultra-crisp screenshot on high-DPI devices
+            useCORS: true,
+            logging: false,
+            allowTaint: true
+          });
+
+          // Restore hidden elements
+          noExportElements.forEach(el => el.style.display = '');
+
+          const dataUrl = capturedCanvas.toDataURL('image/png');
+          triggerDownload(dataUrl, filename);
+        } else {
+          // Fallback to pure high-res canvas rendering
+          const skinHex = sampledHexLabel.textContent || "#E2B193";
+          const dataUrl = renderFallbackCanvas(season, skinHex);
+          triggerDownload(dataUrl, filename);
+        }
+
+        showToast(`Downloaded ${season.title} card to your files!`);
+      } catch (err) {
+        console.error("html2canvas error, switching to direct canvas fallback:", err);
+        try {
+          const skinHex = sampledHexLabel.textContent || "#E2B193";
+          const dataUrl = renderFallbackCanvas(season, skinHex);
+          triggerDownload(dataUrl, filename);
+          showToast(`Downloaded ${season.title} card to your files!`);
+        } catch (fallbackErr) {
+          console.error("Download failed:", fallbackErr);
+          showToast("Could not export PNG. Please try again.");
+        }
+      } finally {
+        saveLookBtn.disabled = false;
+        saveLookBtn.innerHTML = originalText;
+        lucide.createIcons();
+      }
+    });
+
+    // Initial setup on window load
+    window.addEventListener('DOMContentLoaded', () => {
+      renderDrapePresets();
+      startCamera();
+
+      // Initial populate with default Warm Autumn
+      updateResultsUI({
+        matchedKey: "warm_autumn",
+        isWarm: true,
+        isNeutral: false,
+        depth: "Medium",
+        ita: 34.2,
+        chroma: 28,
+        L: 62,
+        warmScore: 68
+      }, 215, 165, 135);
+    });
+  </script>
+</body>
+</html>
